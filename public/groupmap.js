@@ -116,6 +116,7 @@ function show_map(f) {
     })
     tiles.addTo(map);
     map.on('click', show_fluff_marker);
+    load_fluff(folder);
 }
 
 function switch_markers() {
@@ -129,4 +130,3 @@ function switch_markers() {
 }
 
 show_map('2017-glc8');
-load_fluff(folder);
