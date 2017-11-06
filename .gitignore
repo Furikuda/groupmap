@@ -1,3 +1,3 @@
 db/*.sqlite
-public/group_pics
 *.swp
+public/group_pics
