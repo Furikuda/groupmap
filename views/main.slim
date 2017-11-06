@@ -1,0 +1,45 @@
+doctype html
+html
+  head
+    link rel="stylesheet" href="/leaflet/leaflet.css"
+    link type="text/css" rel="stylesheet" href="/materialize/css/materialize.min.css"  media="screen,projection"
+    script src="/jquery-3.2.1.min.js"
+    script src="/leaflet/leaflet.js"
+    script src="/materialize/js/materialize.min.js"
+
+  body
+    div class="container"
+      h1
+        | Fluffy maps
+      div class="row"
+        div class="col"
+          a class="dropdown-button btn" href="#" data-activates="dropdownmaps"
+            | Select the map
+          ul id="dropdownmaps" class="dropdown-content"
+            -@liste.each do |f|
+              li
+                a href="#!" onclick="show_map('#{f}')"
+                  | #{f} 
+        div class="col"
+          form action='#'
+            div class="row"
+              div class="col"
+                | Show markers
+              div class="col"
+                div class="switch"
+                  label 
+                    | Off
+                    input checked=true type="checkbox" id="show_markers_switch" onchange="switch_markers()"
+                    span class="lever"
+                    | On
+
+
+      div id="map" class="row s12" style="height:600px"
+      div id="popup" class="ol-popup"
+          a href="#" id="popup-closer" class="ol-popup-closer"
+          div id="popup-content" class="ol-popup-content"
+              img id="popup-content-icon" 
+              a target='_blank' id='popup-content-link'
+      script src="/groupmap.js"
+
+  
