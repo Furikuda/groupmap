@@ -1,17 +1,14 @@
-var folder = '';
-
+var all_maps;
 var temp_marker;
+
 var map = L.map('map', {
-    minZoom: 0,
+    minZoom: 2,
     maxZoom: 7,
     crs: L.CRS.Simple
-
 }).setView([-20, 100], 3);
-var all_fluff = {'fluff': []};
-
 var marker_layer = new L.LayerGroup();
 
-function make_content(fluff) {
+function make_fluff_popup_text(fluff) {
     var html = '<b>'+fluff.name+'</b>';
     if (fluff.info) {
         html += "<p>";
@@ -21,7 +18,7 @@ function make_content(fluff) {
     return html
 }
 
-function add_fluff(fluff) {
+function add_fluff(fluff, map_folder) {
      $.ajax({
         url: "/add_fluff",
         type: "POST",
@@ -29,7 +26,7 @@ function add_fluff(fluff) {
         data: fluff,
         success: function(data, textStatus) {
             temp_marker.closePopup();
-            load_fluff(folder);
+            load_fluff(map_folder);
         },
         error: function(data) {
             console.log(data.responseText);
@@ -45,7 +42,7 @@ function show_fluff_marker(evt){
     var lng = evt.latlng.lng;
 
     if (typeof temp_marker !== 'undefined') {
-        temp_marker.unbindPopup(); 
+        temp_marker.unbindPopup();
         temp_marker.remove();
     }
 
@@ -63,6 +60,7 @@ function show_fluff_marker(evt){
     temp_marker.bindPopup(popupContent,{
                     keepInView: true,
                     }).openPopup();
+
     $('#add-fluff-form').on('submit', function(e) {
         e.preventDefault();
         var fluff = {};
@@ -70,8 +68,7 @@ function show_fluff_marker(evt){
         fluff.info = $('#add-fluff-info-field').val();
         fluff.lat = $('#add-fluff-lat-field').val();
         fluff.lng = $('#add-fluff-lng-field').val();
-        fluff.map = folder;
-        add_fluff(fluff);
+        add_fluff(fluff, evt.target.map_folder);
     });
 }
 
@@ -85,7 +82,7 @@ function load_fluff(f) {
             });
             for (var i in data['fluff']) {
                 fluff = data['fluff'][i];
-                var popup_content = make_content(fluff)
+                var popup_content = make_fluff_popup_text(fluff)
                 var marker = L.marker([fluff.lat, fluff.lng])
                 marker.bindPopup(popup_content);
                 marker.addTo(marker_layer);
@@ -99,28 +96,28 @@ function load_fluff(f) {
 //            toastr.error(data.responseText);
         }
     });
-
 }
 
-function show_map(f) {
-    folder = f;
+function show_map(map_folder) {
     map.eachLayer(function (layer) {
             map.removeLayer(layer);
     });
 
-    var tiles = L.tileLayer('/group_pics/'+folder+'/{z}/{y}/{x}.jpg', {
-        minzoom: 0,
+    var info_text = '' ;
+
+    var tiles = L.tileLayer('/group_pics/'+map_folder+'/{z}/{y}/{x}.jpg', {
+        minzoom: 2,
         maxzoom: 7,
         noWrap: true,
-        attribution: folder,
+        attribution: info_text,
     })
     tiles.addTo(map);
+    map.map_folder = map_folder;
     map.on('click', show_fluff_marker);
-    load_fluff(folder);
+    load_fluff(map_folder);
 }
 
 function switch_markers() {
-    console.log('poil');
     var pane = map.getPane('markerPane');
     if (document.getElementById('show_markers_switch').checked) {
         pane.style.zIndex = 650;
@@ -129,4 +126,19 @@ function switch_markers() {
     }
 }
 
-show_map('2017-glc8');
+function load_maps() {
+    $.ajax({
+        url: "/list_maps",
+        dataType: "json",
+        success: function(data, textStatus) {
+            all_maps = data['maps'];
+            show_map(all_maps[0]['folder']);
+        },
+        error: function(data) {
+            console.log(data.responseText);
+//            toastr.options.timeOut = 1500;
+//            toastr.options.positionClass= "toast-top-center";
+//            toastr.error(data.responseText);
+        }
+    });
+}

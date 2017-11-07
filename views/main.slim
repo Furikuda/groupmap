@@ -19,8 +19,8 @@ html
           ul id="dropdownmaps" class="dropdown-content"
             -@liste.each do |f|
               li
-                a href="#!" onclick="show_map('#{f}')"
-                  |#{f}
+                a href="#!" onclick="show_map('#{f['folder']}')"
+                  |#{f['name']}
         div class="col"
           form action='#'
             div class="row"
@@ -58,7 +58,7 @@ html
                 |OK!
 
 
-      div id="map" class="row s12" style="height:600px"
+      div id="map" class="row s12" style="height:50em"
       script src="/groupmap.js"
       javascript:
-        $(document).ready(function() { $('.modal').modal(); });
+        $(document).ready(function() { $('.modal').modal(); load_maps()});

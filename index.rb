@@ -17,13 +17,20 @@ def fix_name(n)
     return name.strip()
 end
 
-get '/' do
-    @liste = []
-    Dir.glob(File.join($group_images_dir, "*")).each do |j|
-        if File.directory?(j)
-            @liste << File.basename(j)
-        end
+def get_map_list()
+    liste = []
+    Dir.glob(File.join($group_images_dir, "*", "manifest.json")).each do |j|
+        metadata = JSON.parse(File.read(j))
+        metadata['folder'] = File.basename(File.dirname(j))
+        liste << metadata
     end
+    liste.sort_by{|x| x['year']}.reverse
+end
+
+$map_list = get_map_list()
+
+get '/' do
+    @liste = $map_list
     slim :main
 end
 
@@ -47,7 +54,12 @@ end
 
 get '/list_fluff' do
     map = params[:map]
-    content_type 'application/json'
     p = DBUtils.get_all_fluff(map).map{|p| p.to_hash}
+    content_type 'application/json'
     {'fluff' => p}.to_json
+end
+
+get '/list_maps' do
+    content_type 'application/json'
+    {'maps' => $map_list}.to_json
 end

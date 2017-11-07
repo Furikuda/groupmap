@@ -18,11 +18,24 @@ apt-get install libvips-tools
 
 Get a big pic, and build the tiles pyramid
 ```
+mkdir myconvention; cd myconvention
 wget http://big/pic.jpg
 vips dzsave pic.jpg  --layout google --tile-size 256  my-big-pic
 ```
-Then move it to the public/group_pics folder
+You then might want to add some metadata about the group pic. Make a new file names manifest.json, that looks like this!
 ```
-mv my-big-pic public/group_pics
+{
+    "name": "My Con 88",
+    "shortname": "MC 88",
+    "year": "2088",
+    "url": "https://my.con/88",
+    "source_pic": "pic.jpg",
+    "source_photographer": "https://twitter.com/MyConBestPalPhotographer"
+}
+```
+
+Then move the folder myconvention into the public/group_pics folder
+```
+mv myconvention public/group_pics/
 ```
 and restart the webserver.
