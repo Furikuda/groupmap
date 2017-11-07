@@ -44,12 +44,15 @@ post '/add_fluff' do
     lng = params[:lng].to_f
     map = params[:map]
 
-    return unless (name && lat && lng && map)
+    unless (name && lat && lng && map)
+        $stderr.puts("missing info")
+        return {:msg => "missing info"}
+    end
 
     DBUtils.add_fluff(map, name, info, lat, lng)
 
     content_type 'application/json'
-    {:msg => "Data updated!"}.to_json
+    return {:msg => "Data updated!"}.to_json
 end
 
 get '/list_fluff' do

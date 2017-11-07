@@ -19,6 +19,7 @@ function make_fluff_popup_text(fluff) {
 }
 
 function add_fluff(fluff, map_folder) {
+    fluff['map'] = map_folder;
      $.ajax({
         url: "/add_fluff",
         type: "POST",
