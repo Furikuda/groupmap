@@ -1,7 +1,7 @@
 var all_maps;
 var temp_marker;
 
-var map = L.map('map', {
+var leafletmap = L.map('map', {
     minZoom: 2,
     maxZoom: 7,
     crs: L.CRS.Simple
@@ -12,7 +12,7 @@ function make_fluff_popup_text(fluff) {
     var html = '<b>'+fluff.name+'</b>';
     if (fluff.info) {
         html += "<p>";
-        html += fluff.info.replace(/(http[^ ]+)/, function(match, url) {return "<a href='" + url + "'>" + url + "</a>"});
+        html += fluff.info.replace(/(http[^ ]+)/, function(match, url) {return '<a href="' + url + '" target="_blank">' + url + '</a>'});
         html += "</p>";
     }
     return html
@@ -87,7 +87,7 @@ function load_fluff(f) {
                 marker.bindPopup(popup_content);
                 marker.addTo(marker_layer);
             }
-            marker_layer.addTo(map);
+            marker_layer.addTo(leafletmap);
         },
         error: function(data) {
             console.log(data.responseText);
@@ -98,27 +98,61 @@ function load_fluff(f) {
     });
 }
 
+function get_map_metadata_from_folder(folder, all_maps) {
+    for (var i in all_maps) {
+        m = all_maps[i];
+        if (m['folder'] == folder) {
+            return m;
+        }
+    }
+    return;
+}
+
 function show_map(map_folder) {
-    map.eachLayer(function (layer) {
-            map.removeLayer(layer);
+    var map_metadata = get_map_metadata_from_folder(map_folder, all_maps);
+    leafletmap.eachLayer(function (layer) {
+            leafletmap.removeLayer(layer);
     });
 
-    var info_text = '' ;
+    var info_text = [] ;
+
+    var info_name = ''
+    if (map_metadata['name']) {
+        info_name = map_metadata['name'];
+    } else if (map_metadata['short_name']) {
+        info_name = map_metadata['sort_name'];
+    }
+    if (info_name) {
+        if (map_metadata['url']) {
+            info_text.push('<a href="'+map_metadata['url']+'" target="_blank">'+info_name+'</a>');
+        } else {
+            info_text.push(info_name);
+        }
+    }
+
+    var p = map_metadata['source_photographer'];
+    if (p) {
+        if (p.startsWith('http')) {
+            info_text.push('<a href="'+p+'" target="_blank">'+p+'</a>');
+        } else {
+            info_text.push(p);
+        }
+    }
 
     var tiles = L.tileLayer('/group_pics/'+map_folder+'/{z}/{y}/{x}.jpg', {
         minzoom: 2,
         maxzoom: 7,
         noWrap: true,
-        attribution: info_text,
+        attribution: info_text.join(' - '),
     })
-    tiles.addTo(map);
-    map.map_folder = map_folder;
-    map.on('click', show_fluff_marker);
+    tiles.addTo(leafletmap);
+    leafletmap.map_folder = map_folder;
+    leafletmap.on('click', show_fluff_marker);
     load_fluff(map_folder);
 }
 
 function switch_markers() {
-    var pane = map.getPane('markerPane');
+    var pane = leafletmap.getPane('markerPane');
     if (document.getElementById('show_markers_switch').checked) {
         pane.style.zIndex = 650;
     } else {
