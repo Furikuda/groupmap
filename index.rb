@@ -10,7 +10,7 @@ require "slim"
 
 require_relative "./db.rb"
 
-$group_images_dir = File.join('public', 'group_pics')
+$group_images_dirname = 'group_pics'
 
 def fix_name(n)
     name = CGI.escapeHTML(n)
@@ -19,7 +19,7 @@ end
 
 def get_map_list()
     liste = []
-    Dir.glob(File.join($group_images_dir, "*", "manifest.json")).each do |j|
+    Dir.glob(File.join('public', $group_images_dirname, "*", "manifest.json")).each do |j|
         metadata = JSON.parse(File.read(j))
         metadata['folder'] = File.basename(File.dirname(j))
         liste << metadata
@@ -65,4 +65,24 @@ end
 get '/list_maps' do
     content_type 'application/json'
     {'maps' => $map_list}.to_json
+end
+
+get "/#{$group_images_dirname}/:folder/:z/:x/:y.*" do |folder, z, x, y, ext|
+    case ext
+    when "jpg"
+        content_type 'image/jpeg'
+    when "png"
+        content_type 'image/png'
+    end
+
+    begin
+        tile_path = File.join('public', $group_images_dirname, folder, z, x, "#{y}.#{ext}")
+        content = File.open(tile_path, 'rb').read()
+    rescue Errno::ENOENT
+        content_type 'image/png'
+        blank_path = File.join('public', $group_images_dirname, folder, "blank.png")
+        content = File.open(blank_path, 'rb').read()
+    end
+
+    content
 end
