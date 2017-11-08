@@ -7,6 +7,7 @@ var leafletmap = L.map('map', {
     crs: L.CRS.Simple
 }).setView([-20, 100], 3);
 var marker_layer = new L.LayerGroup();
+var layerControl = L.control.layers(null, {'Toggle markers' : marker_layer}, {collapsed: false});
 
 function make_fluff_popup_text(fluff) {
     var html = '<b>'+fluff.name+'</b>';
@@ -27,7 +28,7 @@ function add_fluff(fluff, map_folder) {
         data: fluff,
         success: function(data, textStatus) {
             temp_marker.closePopup();
-            load_fluff(map_folder);
+            load_fluff_layer(map_folder);
         },
         error: function(data) {
             console.log(data.responseText);
@@ -73,7 +74,8 @@ function show_fluff_marker(evt){
     });
 }
 
-function load_fluff(f) {
+function load_fluff_layer(f) {
+    console.log('load fluff');
     $.ajax({
         url: "/list_fluff?map="+f,
         dataType: "json",
@@ -89,6 +91,7 @@ function load_fluff(f) {
                 marker.addTo(marker_layer);
             }
             marker_layer.addTo(leafletmap);
+            layerControl.addTo(leafletmap);
         },
         error: function(data) {
             console.log(data.responseText);
@@ -109,12 +112,7 @@ function get_map_metadata_from_folder(folder, all_maps) {
     return;
 }
 
-function show_map(map_folder) {
-    var map_metadata = get_map_metadata_from_folder(map_folder, all_maps);
-    leafletmap.eachLayer(function (layer) {
-            leafletmap.removeLayer(layer);
-    });
-
+function make_map_info_html(map_metadata) {
     var info_text = [] ;
 
     var info_name = ''
@@ -139,26 +137,25 @@ function show_map(map_folder) {
             info_text.push(p);
         }
     }
+    return info_text.join(' - ');
+}
+
+function show_map(map_folder) {
+    leafletmap.eachLayer(function (layer) {
+            leafletmap.removeLayer(layer);
+    });
 
     var tiles = L.tileLayer('/group_pics/'+map_folder+'/{z}/{y}/{x}.jpg', {
         minzoom: 2,
         maxzoom: 7,
         noWrap: true,
-        attribution: info_text.join(' - '),
-    })
+        attribution: make_map_info_html(get_map_metadata_from_folder(map_folder, all_maps))
+    });
+
     tiles.addTo(leafletmap);
     leafletmap.map_folder = map_folder;
     leafletmap.on('click', show_fluff_marker);
-    load_fluff(map_folder);
-}
-
-function switch_markers() {
-    var pane = leafletmap.getPane('markerPane');
-    if (document.getElementById('show_markers_switch').checked) {
-        pane.style.zIndex = 650;
-    } else {
-        pane.style.zIndex = 0;
-    }
+    load_fluff_layer(map_folder);
 }
 
 function load_maps() {

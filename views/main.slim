@@ -22,18 +22,6 @@ html
                 a href="#!" onclick="show_map('#{f['folder']}')"
                   |#{f['name']}
         div class="col"
-          form action='#'
-            div class="row"
-              div class="col"
-                |Show markers
-              div class="col"
-                div class="switch"
-                  label
-                    |Off
-                    input checked=true type="checkbox" id="show_markers_switch" onchange="switch_markers()"
-                    span class="lever"
-                    |On
-        div class="col"
           a class="waves-effect waves-light btn modal-trigger" href="#aboutmodal"
             |About
           div id="aboutmodal" class="modal"
@@ -56,7 +44,6 @@ html
             div class="modal-footer"
               a href="#!" class="modal-action modal-close  waves-effect waves-green btn-flat "
                 |OK!
-
 
       div id="map" class="row s12" style="height:50em"
       script src="/groupmap.js"
