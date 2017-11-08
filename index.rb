@@ -18,19 +18,19 @@ def fix_name(n)
 end
 
 def get_map_list()
-    liste = []
+    maplist = []
     Dir.glob(File.join('public', $group_images_dirname, "*", "manifest.json")).each do |j|
         metadata = JSON.parse(File.read(j))
         metadata['folder'] = File.basename(File.dirname(j))
-        liste << metadata
+        maplist << metadata
     end
-    liste.sort_by{|x| x['year']}.reverse
+    maplist.sort_by{|x| x['year']}.reverse
 end
 
-$map_list = get_map_list()
+$maplist = get_map_list()
 
 get '/' do
-    @liste = $map_list
+    @maplist = $maplist
     slim :main
 end
 
@@ -45,7 +45,7 @@ post '/add_fluff' do
     map = params[:map]
 
     unless (name && lat && lng && map)
-        $stderr.puts("missing info")
+        $stderr.puts "missing info"
         return {:msg => "missing info"}
     end
 
@@ -64,7 +64,7 @@ end
 
 get '/list_maps' do
     content_type 'application/json'
-    {'maps' => $map_list}.to_json
+    {'maps' => $maplist}.to_json
 end
 
 get "/#{$group_images_dirname}/:folder/:z/:x/:y.*" do |folder, z, x, y, ext|

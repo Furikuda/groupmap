@@ -1,5 +1,7 @@
 // This is our magical global env
 var groupmap = {
+    // The name of the folder with the map, serves as map identifier
+    mapFolder: undefined,
     // An array of map metadata
     mapsList: undefined,
     // The marker used to add more fluff
@@ -22,8 +24,8 @@ function make_fluff_popup_text(fluff) {
     return html
 }
 
-function add_fluff(fluff, map_folder) {
-    fluff['map'] = map_folder;
+function add_fluff(fluff, mapFolder) {
+    fluff['map'] = mapFolder;
      $.ajax({
         url: "/add_fluff",
         type: "POST",
@@ -31,7 +33,7 @@ function add_fluff(fluff, map_folder) {
         data: fluff,
         success: function(data, textStatus) {
             groupmap.tempMarker.closePopup();
-            load_fluff_layer(map_folder);
+            load_fluff_layer(mapFolder);
         },
         error: function(data) {
             console.log(data.responseText);
@@ -71,7 +73,7 @@ function show_new_fluff_marker(evt){
         new_fluff.info = $('#add-fluff-info-field').val();
         new_fluff.lat = $('#add-fluff-lat-field').val();
         new_fluff.lng = $('#add-fluff-lng-field').val();
-        add_fluff(new_fluff, groupmap.map_folder);
+        add_fluff(new_fluff, groupmap.mapFolder);
     });
 }
 
@@ -112,7 +114,7 @@ function get_map_metadata_from_folder(folder) {
 }
 
 function make_map_info_html(map_metadata) {
-    var info_text = [] ;
+    var infos = [] ;
 
     var info_name = ''
     if (map_metadata['name']) {
@@ -122,21 +124,32 @@ function make_map_info_html(map_metadata) {
     }
     if (info_name) {
         if (map_metadata['url']) {
-            info_text.push('<a href="'+map_metadata['url']+'" target="_blank">'+info_name+'</a>');
+            infos.push('<a href="'+map_metadata['url']+'" target="_blank">'+info_name+'</a>');
         } else {
-            info_text.push(info_name);
+            infos.push(info_name);
         }
     }
 
     var p = map_metadata['source_photographer'];
     if (p) {
         if (p.startsWith('http')) {
-            info_text.push('<a href="'+p+'" target="_blank">'+p+'</a>');
+            infos.push('<a href="'+p+'" target="_blank">'+p+'</a>');
         } else {
-            info_text.push(p);
+            infos.push(p);
         }
     }
-    return info_text.join(' - ');
+
+    var pic = map_metadata['source_pic'];
+    if (pic) {
+        var url_pic;
+        if (pic.startsWith('http')) {
+            url_pic = '<a href="'+pic+'" target="_blank">Full image</a>'
+        } else {
+            url_pic = '<a href="/group_pics/'+groupmap.mapFolder+'/'+pic+'" target="_blank">Full image</a>'
+        }
+        infos.push(url_pic);
+    }
+    return infos.join(' - ');
 }
 
 function init_leafletmap(groupmap){
@@ -156,18 +169,18 @@ function init_leafletmap(groupmap){
     });
 }
 
-function show_map(map_folder) {
-    groupmap.map_folder = map_folder;
+function show_map(mapFolder) {
+    groupmap.mapFolder = mapFolder;
     init_leafletmap(groupmap)
 
     // Adds the tiles/picture layer
-    L.tileLayer('/group_pics/'+map_folder+'/{z}/{y}/{x}.jpg', {
+    L.tileLayer('/group_pics/'+mapFolder+'/{z}/{y}/{x}.jpg', {
         noWrap: true,
-        attribution: make_map_info_html(get_map_metadata_from_folder(map_folder))
+        attribution: make_map_info_html(get_map_metadata_from_folder(mapFolder))
     }).addTo(groupmap.leafletMap);
 
     // Adds the markers layer
-    load_fluff_layer(map_folder);
+    load_fluff_layer(mapFolder);
 
     groupmap.leafletMap.on('click', show_new_fluff_marker);
 }

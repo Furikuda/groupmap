@@ -17,7 +17,7 @@ html
           a class="dropdown-button btn" href="#" data-activates="dropdownmaps"
             |Select the map
           ul id="dropdownmaps" class="dropdown-content"
-            -@liste.each do |f|
+            -@maplist.each do |f|
               li
                 a href="#!" onclick="show_map('#{f['folder']}')"
                   |#{f['name']}
