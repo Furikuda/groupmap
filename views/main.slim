@@ -13,46 +13,47 @@ html
       h1
         |Fluffy maps
 
-      div class="row"
+      div id="menu" class="row"
         div class="col"
           a class="dropdown-button btn" href="#" data-activates="dropdownmaps"
             |Select a Fluffy group picture
             i class="material-icons right"
               |arrow_drop_down_circle
-          ul id="dropdownmaps" class="dropdown-content"
-            -@maplist.each do |f|
-              li
-                a href="#!" onclick="show_map('#{f['folder']}')"
-                  |#{f['name']}
         div class="col"
           a class="waves-effect waves-light btn modal-trigger" href="#aboutmodal"
             |About
-          div id="aboutmodal" class="modal"
-            div class="modal-content"
-              h4
-                |About
-              p
-                i
-                  b
-                    |Click on an empty spot on the map to add info about a Fluff
-              p
-                |I made this little toy project to keep track of fluffy faces.
-              p
-                |I'm no web developer, I'm no developer.
-              p
-                |Please reach out to me (button bellow) for errors and complaints.
-              p
-                span
-                  a href='https://twitter.com/JokullBarkson' target='_blank'
-                    |Author &nbsp;&nbsp;
-                span
-                  a href='https://github.com/FuriKida' target='_blank'
-                    |Code
-            div class="modal-footer"
-              a href="#!" class="modal-action modal-close  waves-effect waves-green btn-flat "
-                |OK!
 
       div id="map" class="row s12" style="height:50em; z-index:10"
+
+      ul id="dropdownmaps" class="dropdown-content"
+        -@maplist.each do |f|
+          li
+            a href="#!" onclick="show_map('#{f['folder']}')"
+              |#{f['name']}
+      div id="aboutmodal" class="modal"
+        div class="modal-content"
+          h4
+            |About
+          p
+            i
+              b
+                |Click on an empty spot on the map to add info about a Fluff
+          p
+            |I made this little toy project to keep track of fluffy faces.
+          p
+            |I'm no web developer, I'm no developer.
+          p
+            |Please reach out to me (button bellow) for errors and complaints.
+          p
+            span
+              a href='https://twitter.com/JokullBarkson' target='_blank'
+                |Author &nbsp;&nbsp;
+            span
+              a href='https://github.com/FuriKida' target='_blank'
+                |Code
+        div class="modal-footer"
+          a href="#!" class="modal-action modal-close  waves-effect waves-green btn-flat "
+            |OK!
       script src="/groupmap.js"
       javascript:
         $(document).ready(function() { $('.modal').modal(); load_maps()});
