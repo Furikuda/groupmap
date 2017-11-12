@@ -3,6 +3,7 @@ html
   head
     link rel="stylesheet" href="/leaflet/leaflet.css"
     link type="text/css" rel="stylesheet" href="/materialize/css/materialize.min.css"  media="screen,projection"
+    link rel="stylesheet" href="/groupmap.css"
     script src="/jquery-3.2.1.min.js"
     script src="/leaflet/leaflet.js"
     script src="/materialize/js/materialize.min.js"
@@ -16,6 +17,8 @@ html
         div class="col"
           a class="dropdown-button btn" href="#" data-activates="dropdownmaps"
             |Select a Fluffy group picture
+            i class="material-icons right"
+              |arrow_drop_down_circle
           ul id="dropdownmaps" class="dropdown-content"
             -@maplist.each do |f|
               li
