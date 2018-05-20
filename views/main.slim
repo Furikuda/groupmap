@@ -28,7 +28,7 @@ html
       ul id="dropdownmaps" class="dropdown-content"
         -@maplist.each do |f|
           li
-            a href="#!" onclick="show_map('#{f['folder']}')"
+            a href="##{f['folder']}" onclick="show_map('#{f['folder']}')"
               |#{f['name']}
       div id="aboutmodal" class="modal"
         div class="modal-content"

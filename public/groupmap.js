@@ -192,7 +192,11 @@ function load_maps() {
             dataType: "json",
             success: function(data, textStatus) {
                 groupmap.mapsList = data['maps'];
-                show_map(groupmap.mapsList[0]['folder']);
+                if(window.location.hash) {
+                    show_map(window.location.hash.split('#')[1]);
+                } else {
+                    show_map(groupmap.mapsList[0]['folder']);
+                }
             },
             error: function(data) {
                 console.log(data.responseText);
