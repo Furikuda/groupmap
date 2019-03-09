@@ -152,11 +152,11 @@ function make_map_info_html(map_metadata) {
     return infos.join(' - ');
 }
 
-function init_leafletmap(groupmap){
+function init_leafletmap(groupmap, max_zoom=7){
     if (typeof groupmap.leafletMap === 'undefined') {
         var map = L.map('map', {
             minZoom: 2,
-            maxZoom: 7,
+            maxZoom: max_zoom,
             crs: L.CRS.Simple
         }).setView([-20, 100], 3);
         groupmap.leafletMap = map;
@@ -171,12 +171,17 @@ function init_leafletmap(groupmap){
 
 function show_map(mapFolder) {
     groupmap.mapFolder = mapFolder;
-    init_leafletmap(groupmap)
+    var map_metadata = get_map_metadata_from_folder(mapFolder);
+    var max_zoom = 7;
+    if ('max_zoom' in map_metadata) {
+        max_zoom = map_metadata['max_zoom'];
+    }
+    init_leafletmap(groupmap, maxzoom=max_zoom);
 
     // Adds the tiles/picture layer
     L.tileLayer('/group_pics/'+mapFolder+'/{z}/{y}/{x}.jpg', {
         noWrap: true,
-        attribution: make_map_info_html(get_map_metadata_from_folder(mapFolder))
+        attribution: make_map_info_html(map_metadata)
     }).addTo(groupmap.leafletMap);
 
     // Adds the markers layer
