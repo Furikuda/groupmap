@@ -167,6 +167,7 @@ function init_leafletmap(groupmap, max_zoom=7){
     groupmap.leafletMap.eachLayer(function (layer) {
             groupmap.leafletMap.removeLayer(layer);
     });
+    groupmap.leafletMap.options.maxZoom = max_zoom;
 }
 
 function show_map(mapFolder) {
