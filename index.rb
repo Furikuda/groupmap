@@ -57,7 +57,7 @@ end
 
 get '/list_fluff' do
     map = params[:map]
-    p = DBUtils.get_all_fluff(map).map{|p| p.to_hash}
+    p = DBUtils.get_all_fluff(map).map{|x| x.to_hash}
     content_type 'application/json'
     {'fluff' => p}.to_json
 end
