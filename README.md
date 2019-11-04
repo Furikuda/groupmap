@@ -5,7 +5,7 @@ Find your peeps on a map.
 ## Install                                                                                                                                         
                                                                                                                                                    
 ```
-apt-get install ruby ruby-slim ruby-sinatra
+apt-get install ruby ruby-slim ruby-sinatra ruby-sequel ruby-sqlite3
 
 git clone https://github.com/Furikuda/groupmap/
 ruby index.rb
