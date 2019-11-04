@@ -49,7 +49,8 @@ post '/add_fluff' do
         return {:msg => "missing info"}
     end
 
-    DBUtils.add_fluff(map, name, info, lat, lng)
+    fluff_id = DBUtils.add_fluff(name, info)
+    DBUtils.add_fluff_to_map(map, fluff_id, lat, lng)
 
     content_type 'application/json'
     return {:msg => "Data updated!"}.to_json
@@ -57,14 +58,19 @@ end
 
 get '/list_fluff' do
     map = params[:map]
-    p = DBUtils.get_all_fluff(map).map{|x| x.to_hash}
+    p = DBUtils.get_all_fluff_from_map(map).map{|p| p.to_hash}
     content_type 'application/json'
-    {'fluff' => p}.to_json
+    {'fluffs' => p}.to_json
 end
 
 get '/list_maps' do
     content_type 'application/json'
     {'maps' => $maplist}.to_json
+end
+
+get '/all_fluffs' do
+    content_type 'application/json'
+    {'fluffs' => DBUtils.get_all_fluff}.to_json
 end
 
 get "/#{$group_images_dirname}/:folder/:z/:x/:y.*" do |folder, z, x, y, ext|

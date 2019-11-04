@@ -4,6 +4,8 @@ var groupmap = {
     mapFolder: undefined,
     // An array of map metadata
     mapsList: undefined,
+    // An array of fluffs
+    fluffList: undefined,
     // The marker used to add more fluff
     tempMarker: undefined,
     // The leaflet map object
@@ -14,7 +16,8 @@ var groupmap = {
     controlLayer: undefined
 };
 
-function make_fluff_popup_text(fluff) {
+function make_fluff_popup_text(map_marker) {
+    var fluff = get_fluff_from_fluffid(map_marker.fluff_id)
     var html = '<b>'+fluff.name+'</b>';
     if (fluff.info) {
         html += "<p>";
@@ -44,6 +47,34 @@ function add_fluff(fluff, mapFolder) {
     });
 }
 
+function get_fluffs_for_autocomplete() {
+    var result = {};
+    for (var i=0, len=groupmap.fluffList.length; i < len; i++) {
+        result[groupmap.fluffList[i]['name']] = null;
+    }
+    return result;
+}
+
+function get_fluff_from_name(name) {
+    for (var i=0, len=groupmap.fluffList.length; i < len; i++) {
+        var f = groupmap.fluffList[i];
+        if (f['name'] == name ) {
+            return f
+        }
+    }
+    return null;
+}
+
+function get_fluff_from_fluffid(fluff_id) {
+    for (var i=0, len=groupmap.fluffList.length; i < len; i++) {
+        var f = groupmap.fluffList[i];
+        if (f['id'] == fluff_id ) {
+            return f
+        }
+    }
+    return null;
+}
+
 function show_new_fluff_marker(evt){
     var new_fluff = {};
     var lat = evt.latlng.lat;
@@ -58,7 +89,7 @@ function show_new_fluff_marker(evt){
 
     var popupContent = "<b>Who is that Fluff?</b>"+
         "<form id='add-fluff-form' style='width:15em'>" +
-        "<input type='text' name='name' id='add-fluff-name-field' placeholder='Fluff name'>" +
+        "<input type='text' name='name' id='add-fluff-name-field' placeholder='Fluff name' class='autocomplete'>" +
         "<input type='text' name='info' id='add-fluff-info-field' placeholder='extra info of link'>" +
         "<input type='hidden' name='lng' id='add-fluff-lng-field' value='"+lng+"'>" +
         "<input type='hidden' name='lat' id='add-fluff-lat-field' value='"+lat+"'>" +
@@ -66,6 +97,15 @@ function show_new_fluff_marker(evt){
         "</form>";
 
     groupmap.tempMarker.bindPopup(popupContent, {keepInView: true}).openPopup();
+
+    $('#add-fluff-name-field').autocomplete({
+        limit: 5,
+        data: get_fluffs_for_autocomplete(),
+        onAutocomplete: function(v) {
+            var fluff = get_fluff_from_name(v);
+            document.getElementById('add-fluff-info-field').value = fluff['info'];
+        }
+    });
 
     $('#add-fluff-form').on('submit', function(e) {
         e.preventDefault();
@@ -85,8 +125,8 @@ function load_fluff_layer(f) {
             groupmap.markersLayer.eachLayer(function (layer) {
                     groupmap.markersLayer.removeLayer(layer);
             });
-            for (var i in data['fluff']) {
-                fluff = data['fluff'][i];
+            for (var i in data['fluffs']) {
+                fluff = data['fluffs'][i];
                 var popup_content = make_fluff_popup_text(fluff)
                 var marker = L.marker([fluff.lat, fluff.lng])
                 marker.bindPopup(popup_content);
