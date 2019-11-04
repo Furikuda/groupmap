@@ -253,3 +253,18 @@ function load_maps() {
         });
     }
 }
+
+function load_fluffs() {
+    if (typeof groupmap.fluffList === 'undefined'){
+        $.ajax({
+            url: "/all_fluffs",
+            dataType: "json",
+            success: function(data, textStatus) {
+                groupmap.fluffList = data['fluffs'];
+            },
+            error: function(data) {
+                console.log(data.responseText);
+            }
+        });
+    }
+}
