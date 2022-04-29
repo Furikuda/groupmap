@@ -18,7 +18,7 @@ var groupmap = {
 
 function make_fluff_popup_text(map_marker) {
     var fluff = get_fluff_from_fluffid(map_marker.fluff_id)
-    var html = '<b>'+fluff.name+'</b>';
+    var html = '<b data-fluff_id="'+map_marker.fluff_id+'" data-id="'+map_marker.id+'">'+fluff.name+'</b>';
     if (fluff.info) {
         html += "<p>";
         html += fluff.info.replace(/(http[^ ]+)/, function(match, url) {return '<a href="' + url + '" target="_blank">' + url + '</a>'});
@@ -36,6 +36,7 @@ function add_fluff(fluff, mapFolder) {
         data: fluff,
         success: function(data, textStatus) {
             groupmap.tempMarker.closePopup();
+            load_fluffs();
             load_fluff_layer(mapFolder);
         },
         error: function(data) {
@@ -96,7 +97,8 @@ function show_new_fluff_marker(evt){
         "<input type='submit' value='Save'>" +
         "</form>";
 
-    groupmap.tempMarker.bindPopup(popupContent, {keepInView: true}).openPopup();
+    groupmap.tempMarker.bindPopup(popupContent).openPopup();
+    //groupmap.tempMarker.bindPopup(popupContent, {keepInView: true}).openPopup();
 
     $('#add-fluff-name-field').autocomplete({
         limit: 5,
@@ -232,6 +234,7 @@ function show_map(mapFolder) {
 }
 
 function load_maps() {
+    load_fluffs();
     if (typeof groupmap.mapsList === 'undefined'){
         $.ajax({
             url: "/list_maps",
@@ -255,16 +258,14 @@ function load_maps() {
 }
 
 function load_fluffs() {
-    if (typeof groupmap.fluffList === 'undefined'){
-        $.ajax({
-            url: "/all_fluffs",
-            dataType: "json",
-            success: function(data, textStatus) {
-                groupmap.fluffList = data['fluffs'];
-            },
-            error: function(data) {
-                console.log(data.responseText);
-            }
-        });
-    }
+   $.ajax({
+       url: "/all_fluffs",
+       dataType: "json",
+       success: function(data, textStatus) {
+           groupmap.fluffList = data['fluffs'];
+       },
+       error: function(data) {
+           console.log(data.responseText);
+       }
+   });
 }
