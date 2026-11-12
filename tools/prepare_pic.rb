@@ -1,60 +1,72 @@
-image_file = ARGV[0]
-destination_dir = ARGV[1]
+#!/usr/bin/env ruby
+# frozen_string_literal: true
 
-if not (image_file and destination_dir)
-  puts "Usage: #{__FILE__} input_pic.jpg destination_dir"
-  exit 1
+# Builds a tile pyramid + manifest.json for a group picture.
+#
+#   ruby tools/prepare_pic.rb input_pic.jpg destination_dir
+#
+# Requires libvips-tools (vips, vipsheader). Pictures narrower than MIN_WIDTH
+# are upscaled first so there are enough zoom levels; the upscaled copy is
+# temporary, only the original is kept next to the tiles ("Full image").
+
+require 'fileutils'
+require 'json'
+require 'open3'
+require 'tmpdir'
+
+MIN_WIDTH = 20_000
+TILE_SIZE = 256
+
+def run!(*cmd)
+  out, err, status = Open3.capture3(*cmd)
+  abort "Command failed (exit #{status.exitstatus}): #{cmd.join(' ')}\n#{err}" unless status.success?
+  out
+rescue Errno::ENOENT
+  abort "#{cmd.first} not found, please install the libvips-tools package"
 end
 
-$min_width = 20000
+def dimensions(file)
+  %w[width height].map { |field| Integer(run!('vipsheader', '-f', field, file).strip) }
+end
 
-def run_command(cmd)
-  begin
-    io = IO.popen(cmd)
-    return io.read()
-  rescue Errno::ENOENT
-    case cmd[0]
-    when "gm"
-      raise Exception.new("Please install package graphicsmagick")
-    when "vips"
-      raise Exception.new("Please install package libvips-tools")
-    end
+image, dest = ARGV
+abort "Usage: #{$PROGRAM_NAME} input_pic.jpg destination_dir" unless image && dest
+abort "No such file: #{image}" unless File.file?(image)
+abort "#{dest} already exists" if File.exist?(dest)
+
+width, height = dimensions(image)
+
+Dir.mktmpdir('groupmap') do |tmp|
+  tiled = image
+  if width < MIN_WIDTH
+    scale = MIN_WIDTH.fdiv(width)
+    tiled = File.join(tmp, 'upscaled.v') # vips native format: fast, lossless
+    puts format('Upscaling %<w>dx%<h>d by %<s>.2f', w: width, h: height, s: scale)
+    run!('vips', 'resize', image, tiled, scale.to_s)
+    width, height = dimensions(tiled)
   end
+
+  puts "Building picture pyramid in '#{dest}'"
+  run!('vips', 'dzsave', tiled, dest, '--layout', 'google', '--tile-size', TILE_SIZE.to_s, '--suffix', '.jpg')
 end
 
+FileUtils.cp(image, dest)
 
-width, height = run_command(["gm", "identify", "-format", "%w %h", image_file]).split().map{|x| x.to_i}
+# Deepest zoom level = highest numeric folder written by vips.
+max_zoom = Dir.children(dest).grep(/\A\d+\z/).map(&:to_i).max
 
-new_image_file = image_file
-
-if width < $min_width
-  scale = $min_width / width
-  new_width = width * scale
-  new_height = height * scale
-  new_image_file = "big_#{image_file}"
-  puts "Resizing #{image_file} to #{new_image_file}"
-  run_command(["gm", "convert", "-resize", "#{new_width}x#{new_height}", image_file, new_image_file])
-end
-
-
-puts "Building picture pyramid in folder '#{destination_dir}'"
-run_command(["vips", "dzsave", "--layout", "google", new_image_file, destination_dir])
-
-run_command(["cp", image_file, "#{destination_dir}/",])
-run_command(["mv", new_image_file, "#{destination_dir}/",])
-
-manifest_path = File.join(destination_dir, "manifest.json")
-manifest = File.new(manifest_path, "w")
-manifest_string =<<EOMANIFEST
-{
-    "name": "",
-    "shortname": "",
-    "year": "#{Time.now.year}",
-    "source_pic": "#{new_image_file}",
-    "source_photographer": ""
+manifest = {
+  name: '',
+  shortname: '',
+  year: Time.now.year.to_s,
+  url: '',
+  source_pic: File.basename(image),
+  source_photographer: '',
+  max_zoom: max_zoom,
+  width: width,
+  height: height
 }
-EOMANIFEST
-puts "Writing to #{manifest_path} :"
-puts manifest_string
-manifest.write(manifest_string)
-puts "Please update #{manifest_path} as necessary"
+manifest_path = File.join(dest, 'manifest.json')
+File.write(manifest_path, "#{JSON.pretty_generate(manifest)}\n")
+puts "Wrote #{manifest_path}:", File.read(manifest_path)
+puts "Please fill in name/url/photographer in #{manifest_path}"

@@ -1,271 +1,328 @@
-// This is our magical global env
-var groupmap = {
-    // The name of the folder with the map, serves as map identifier
-    mapFolder: undefined,
-    // An array of map metadata
-    mapsList: undefined,
-    // An array of fluffs
-    fluffList: undefined,
-    // The marker used to add more fluff
-    tempMarker: undefined,
-    // The leaflet map object
-    leafletMap: undefined,
-    // The leaflet markers layer
-    markersLayer: undefined,
-    // The leaflet control layer
-    controlLayer: undefined
+// GroupMap front-end. Plain ES module, only depends on Leaflet (global `L`).
+// See AI.md for an overview of how this talks to the Sinatra backend.
+
+const DEFAULT_MAX_ZOOM = 7;
+const TILE_SIZE = 256;
+// Legacy initial view, used when a manifest has no width/height.
+const LEGACY_VIEW = { center: [-20, 100], zoom: 3 };
+
+const state = {
+  maps: [],
+  fluffs: new Map(), // fluff id -> { id, name, info }
+  fluffsByName: new Map(), // display name -> fluff
+  current: null, // manifest of the map on screen
+  bounds: null, // L.LatLngBounds of the picture on screen
+  tileLayer: null,
+  draft: null, // temporary marker used to add a fluff
+  markersToken: 0, // guards against out-of-order marker responses
 };
 
-function make_fluff_popup_text(map_marker) {
-    var fluff = get_fluff_from_fluffid(map_marker.fluff_id)
-    var html = '<b data-fluff_id="'+map_marker.fluff_id+'" data-id="'+map_marker.id+'">'+fluff.name+'</b>';
-    if (fluff.info) {
-        html += "<p>";
-        html += fluff.info.replace(/(http[^ ]+)/, function(match, url) {return '<a href="' + url + '" target="_blank">' + url + '</a>'});
-        html += "</p>";
+const $ = (sel) => document.querySelector(sel);
+const ui = {
+  select: $('#map-select'),
+  toggle: $('#toggle-markers'),
+  aboutOpen: $('#about-open'),
+  about: $('#about'),
+  toast: $('#toast'),
+};
+
+// ---------- Helpers ----------
+
+const escapeHTML = (s) =>
+  String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+const isHttpUrl = (s) => /^https?:\/\//i.test(s ?? '');
+
+const linkHTML = (href, text) =>
+  `<a href="${escapeHTML(href)}" target="_blank" rel="noopener">${escapeHTML(text)}</a>`;
+
+function el(tag, props = {}, ...children) {
+  const node = Object.assign(document.createElement(tag), props);
+  node.append(...children.filter((c) => c != null));
+  return node;
+}
+
+// Turns "foo https://x.y bar" into text nodes and safe <a> elements.
+function linkify(text) {
+  const frag = document.createDocumentFragment();
+  for (const part of text.split(/(https?:\/\/\S+)/i)) {
+    if (!part) continue;
+    frag.append(isHttpUrl(part)
+      ? el('a', { href: part, target: '_blank', rel: 'noopener', textContent: part })
+      : part);
+  }
+  return frag;
+}
+
+let toastTimer;
+function toast(message, { error = false } = {}) {
+  ui.toast.textContent = message;
+  ui.toast.classList.toggle('error', error);
+  ui.toast.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { ui.toast.hidden = true; }, error ? 5000 : 2500);
+}
+
+// ---------- API ----------
+
+class ApiError extends Error {
+  constructor(message, status) {
+    super(message);
+    this.status = status;
+  }
+}
+
+async function getJSON(url, options) {
+  const res = await fetch(url, options);
+  if (!res.ok) {
+    // The server answers errors as {error: "..."}; fall back to the status line.
+    const body = await res.json().catch(() => ({}));
+    throw new ApiError(body.error || `${res.status} ${res.statusText}`, res.status);
+  }
+  return res.json();
+}
+
+const api = {
+  maps: () => getJSON('/list_maps').then((d) => d.maps ?? []),
+  fluffs: () => getJSON('/all_fluffs').then((d) => d.fluffs ?? []),
+  markers: (folder) => getJSON(`/list_fluff?map=${encodeURIComponent(folder)}`).then((d) => d.fluffs ?? []),
+  addFluff: (fields) => getJSON('/add_fluff', { method: 'POST', body: new URLSearchParams(fields) }),
+};
+
+// ---------- Fluff list (autocomplete) ----------
+
+const datalist = el('datalist', { id: 'fluff-names' });
+document.body.append(datalist);
+
+async function loadFluffs() {
+  const rows = await api.fluffs();
+  state.fluffs = new Map();
+  state.fluffsByName = new Map();
+  for (const row of rows) {
+    const fluff = { ...row, info: row.info ?? '' };
+    state.fluffs.set(fluff.id, fluff);
+    if (!state.fluffsByName.has(fluff.name)) state.fluffsByName.set(fluff.name, fluff);
+  }
+  datalist.replaceChildren(...[...state.fluffsByName.keys()].sort().map((name) => el('option', { value: name })));
+}
+
+// ---------- Leaflet map ----------
+
+const map = L.map('map', {
+  crs: L.CRS.Simple,
+  minZoom: 0,
+  maxZoom: DEFAULT_MAX_ZOOM + 1,
+  maxBoundsViscosity: 0.8,
+  zoomControl: true,
+});
+const markers = L.layerGroup().addTo(map);
+
+// Bounds of the picture in CRS.Simple units. One unit is one pixel at zoom 0,
+// so a full pyramid always fits in the 256x256 square at the top-left.
+function imageBounds(meta, maxZoom) {
+  const w = Number(meta.width);
+  const h = Number(meta.height);
+  if (w > 0 && h > 0) {
+    const scale = 2 ** maxZoom;
+    return { bounds: L.latLngBounds([[-h / scale, 0], [0, w / scale]]), exact: true };
+  }
+  return { bounds: L.latLngBounds([[-TILE_SIZE, 0], [0, TILE_SIZE]]), exact: false };
+}
+
+function attributionHTML(meta) {
+  const parts = [];
+  const name = meta.name || meta.shortname || meta.short_name;
+  if (name) parts.push(isHttpUrl(meta.url) ? linkHTML(meta.url, name) : escapeHTML(name));
+
+  const photographer = meta.source_photographer;
+  if (photographer) parts.push(isHttpUrl(photographer) ? linkHTML(photographer, photographer) : escapeHTML(photographer));
+
+  const pic = meta.source_pic;
+  if (pic) {
+    const href = isHttpUrl(pic) ? pic : `/group_pics/${encodeURIComponent(meta.folder)}/${encodeURIComponent(pic)}`;
+    parts.push(linkHTML(href, 'Full image'));
+  }
+  return parts.join(' · ');
+}
+
+function fluffPopup(fluffId) {
+  const fluff = state.fluffs.get(fluffId);
+  if (!fluff) return el('div', { className: 'fluff-popup' }, el('em', { textContent: 'Unknown fluff' }));
+  return el('div', { className: 'fluff-popup' },
+    el('h3', { textContent: fluff.name }),
+    fluff.info ? el('p', {}, linkify(fluff.info)) : null);
+}
+
+async function loadMarkers(folder) {
+  const token = ++state.markersToken;
+  const rows = await api.markers(folder);
+  if (token !== state.markersToken) return; // a newer request superseded this one
+  markers.clearLayers();
+  for (const row of rows) {
+    const fluff = state.fluffs.get(row.fluff_id);
+    L.marker([row.lat, row.lng], { title: fluff?.name ?? '', alt: fluff?.name ?? 'Fluff' })
+      .bindPopup(() => fluffPopup(row.fluff_id))
+      .addTo(markers);
+  }
+}
+
+async function showMap(folder) {
+  const meta = state.maps.find((m) => m.folder === folder) ?? state.maps[0];
+  if (!meta) return;
+  state.current = meta;
+  ui.select.value = meta.folder;
+  document.title = `${meta.name || meta.folder} · Fluffy maps`;
+
+  closeDraft();
+  markers.clearLayers();
+  state.tileLayer?.remove();
+
+  const maxZoom = Number(meta.max_zoom) || DEFAULT_MAX_ZOOM;
+  const { bounds, exact } = imageBounds(meta, maxZoom);
+  state.bounds = bounds;
+
+  map.setMinZoom(0);
+  map.setMaxZoom(maxZoom + 1); // one extra level of over-zoom helps precise tapping
+  map.setMaxBounds(bounds.pad(0.2));
+
+  state.tileLayer = L.tileLayer(`/group_pics/${encodeURIComponent(meta.folder)}/{z}/{y}/{x}.jpg`, {
+    noWrap: true,
+    bounds,
+    maxNativeZoom: maxZoom,
+    maxZoom: maxZoom + 1,
+    attribution: attributionHTML(meta),
+  }).addTo(map);
+
+  if (exact) map.fitBounds(bounds);
+  else map.setView(LEGACY_VIEW.center, LEGACY_VIEW.zoom);
+  map.setMinZoom(Math.max(0, Math.floor(map.getBoundsZoom(bounds)) - 1));
+
+  try {
+    await loadMarkers(meta.folder);
+  } catch (err) {
+    console.error(err);
+    toast('Could not load the markers for this picture.', { error: true });
+  }
+}
+
+// ---------- Adding a fluff ----------
+
+function closeDraft() {
+  const draft = state.draft;
+  state.draft = null;
+  draft?.remove();
+}
+
+function addFluffForm(latlng) {
+  const nameInput = el('input', {
+    name: 'name', required: true, maxLength: 100, placeholder: 'Fluff name',
+    autocomplete: 'off', autocapitalize: 'words', enterKeyHint: 'next',
+  });
+  nameInput.setAttribute('list', datalist.id);
+  const infoInput = el('input', {
+    name: 'info', maxLength: 500, placeholder: 'Social link or extra info',
+    autocomplete: 'off', enterKeyHint: 'done',
+  });
+  const save = el('button', { type: 'submit', className: 'btn btn-primary', textContent: 'Save' });
+  const cancel = el('button', { type: 'button', className: 'btn', textContent: 'Cancel' });
+  const form = el('form', { className: 'add-fluff' },
+    el('h3', { textContent: 'Who is that fluff?' }),
+    nameInput, infoInput,
+    el('div', { className: 'actions' }, cancel, save));
+
+  // Picking a known fluff pre-fills their info.
+  nameInput.addEventListener('input', () => {
+    const known = state.fluffsByName.get(nameInput.value);
+    if (known && !infoInput.value) infoInput.value = known.info;
+  });
+  cancel.addEventListener('click', closeDraft);
+  form.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDraft(); });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = nameInput.value.trim();
+    if (!name) return nameInput.focus();
+    save.disabled = true;
+    try {
+      await api.addFluff({ name, info: infoInput.value.trim(), lat: latlng.lat, lng: latlng.lng, map: state.current.folder });
+      closeDraft();
+      toast(`${name} tagged!`);
+      await loadFluffs();
+      await loadMarkers(state.current.folder);
+    } catch (err) {
+      console.error(err);
+      // 400 (validation) and 429 (too fast) carry a message meant for the user.
+      const message = err instanceof ApiError && err.status < 500 ? err.message : 'Saving failed, please try again.';
+      toast(message, { error: true });
+      save.disabled = false;
     }
-    return html
+  });
+  return { form, nameInput };
 }
 
-function add_fluff(fluff, mapFolder) {
-    fluff['map'] = mapFolder;
-     $.ajax({
-        url: "/add_fluff",
-        type: "POST",
-        dataType: "json",
-        data: fluff,
-        success: function(data, textStatus) {
-            groupmap.tempMarker.closePopup();
-            load_fluffs();
-            load_fluff_layer(mapFolder);
-        },
-        error: function(data) {
-            console.log(data.responseText);
-//            toastr.options.timeOut = 1500;
-//            toastr.options.positionClass= "toast-top-center";
-//            toastr.error(data.responseText);
-        }
-    });
+function openDraft(latlng) {
+  closeDraft();
+  const { form, nameInput } = addFluffForm(latlng);
+  const draft = L.marker(latlng, { opacity: 0.75, keyboard: false }).addTo(map);
+  draft.bindPopup(form, { minWidth: 200, autoPanPadding: [16, 16] });
+  draft.on('popupclose', () => { if (state.draft === draft) closeDraft(); });
+  state.draft = draft;
+  draft.openPopup();
+  // Only autofocus with a mouse: on touch it pops the keyboard and shifts the view.
+  if (matchMedia('(pointer: fine)').matches) nameInput.focus();
 }
 
-function get_fluffs_for_autocomplete() {
-    var result = {};
-    for (var i=0, len=groupmap.fluffList.length; i < len; i++) {
-        result[groupmap.fluffList[i]['name']] = null;
-    }
-    return result;
-}
+// A click that only dismisses an open popup should not start a new tag.
+let popupOpen = false;
+let clickDismissedPopup = false;
+map.on('popupopen', () => { popupOpen = true; });
+map.on('popupclose', () => { popupOpen = false; });
+map.on('preclick', () => { clickDismissedPopup = popupOpen; });
+map.on('click', (e) => {
+  if (clickDismissedPopup || !state.current) return;
+  // Ignore clicks in the margin around the picture; the server would reject them.
+  if (!state.bounds?.contains(e.latlng)) return;
+  openDraft(e.latlng);
+});
 
-function get_fluff_from_name(name) {
-    for (var i=0, len=groupmap.fluffList.length; i < len; i++) {
-        var f = groupmap.fluffList[i];
-        if (f['name'] == name ) {
-            return f
-        }
-    }
-    return null;
-}
+// ---------- Controls ----------
 
-function get_fluff_from_fluffid(fluff_id) {
-    for (var i=0, len=groupmap.fluffList.length; i < len; i++) {
-        var f = groupmap.fluffList[i];
-        if (f['id'] == fluff_id ) {
-            return f
-        }
-    }
-    return null;
-}
+ui.toggle.addEventListener('click', () => {
+  const visible = !map.hasLayer(markers);
+  if (visible) markers.addTo(map);
+  else markers.remove();
+  ui.toggle.setAttribute('aria-pressed', String(visible));
+});
 
-function show_new_fluff_marker(evt){
-    var new_fluff = {};
-    var lat = evt.latlng.lat;
-    var lng = evt.latlng.lng;
+ui.aboutOpen.addEventListener('click', () => ui.about.showModal());
+// Clicking the backdrop closes the dialog.
+ui.about.addEventListener('click', (e) => { if (e.target === ui.about) ui.about.close(); });
 
-    if (typeof groupmap.tempMarker !== 'undefined') {
-        groupmap.tempMarker.unbindPopup();
-        groupmap.tempMarker.remove();
-    }
+ui.select.addEventListener('change', () => { location.hash = encodeURIComponent(ui.select.value); });
 
-    groupmap.tempMarker = L.marker([lat, lng]).addTo(groupmap.markersLayer);
+const folderFromHash = () => decodeURIComponent(location.hash.slice(1));
+window.addEventListener('hashchange', () => showMap(folderFromHash()));
 
-    var popupContent = "<b>Who is that Fluff?</b>"+
-        "<form id='add-fluff-form' style='width:15em'>" +
-        "<input type='text' name='name' id='add-fluff-name-field' placeholder='Fluff name' class='autocomplete'>" +
-        "<input type='text' name='info' id='add-fluff-info-field' placeholder='extra info of link'>" +
-        "<input type='hidden' name='lng' id='add-fluff-lng-field' value='"+lng+"'>" +
-        "<input type='hidden' name='lat' id='add-fluff-lat-field' value='"+lat+"'>" +
-        "<input type='submit' value='Save'>" +
-        "</form>";
+// ---------- Boot ----------
 
-    groupmap.tempMarker.bindPopup(popupContent).openPopup();
-    //groupmap.tempMarker.bindPopup(popupContent, {keepInView: true}).openPopup();
-
-    $('#add-fluff-name-field').autocomplete({
-        limit: 5,
-        data: get_fluffs_for_autocomplete(),
-        onAutocomplete: function(v) {
-            var fluff = get_fluff_from_name(v);
-            document.getElementById('add-fluff-info-field').value = fluff['info'];
-        }
-    });
-
-    $('#add-fluff-form').on('submit', function(e) {
-        e.preventDefault();
-        new_fluff.name = $('#add-fluff-name-field').val();
-        new_fluff.info = $('#add-fluff-info-field').val();
-        new_fluff.lat = $('#add-fluff-lat-field').val();
-        new_fluff.lng = $('#add-fluff-lng-field').val();
-        add_fluff(new_fluff, groupmap.mapFolder);
-    });
-}
-
-function load_fluff_layer(f) {
-    $.ajax({
-        url: "/list_fluff?map="+f,
-        dataType: "json",
-        success: function(data, textStatus) {
-            groupmap.markersLayer.eachLayer(function (layer) {
-                    groupmap.markersLayer.removeLayer(layer);
-            });
-            for (var i in data['fluffs']) {
-                fluff = data['fluffs'][i];
-                var popup_content = make_fluff_popup_text(fluff)
-                var marker = L.marker([fluff.lat, fluff.lng])
-                marker.bindPopup(popup_content);
-                marker.addTo(groupmap.markersLayer);
-            }
-            groupmap.markersLayer.addTo(groupmap.leafletMap);
-        },
-        error: function(data) {
-            console.log(data.responseText);
-//            toastr.options.timeOut = 1500;
-//            toastr.options.positionClass= "toast-top-center";
-//            toastr.error(data.responseText);
-        }
-    });
-}
-
-function get_map_metadata_from_folder(folder) {
-    for (var i in groupmap.mapsList) {
-        m = groupmap.mapsList[i];
-        if (m['folder'] == folder) {
-            return m;
-        }
-    }
+async function boot() {
+  try {
+    const [maps] = await Promise.all([api.maps(), loadFluffs()]);
+    state.maps = maps;
+  } catch (err) {
+    console.error(err);
+    toast('Could not load the group pictures.', { error: true });
     return;
+  }
+
+  if (!state.maps.length) {
+    ui.select.replaceChildren(el('option', { textContent: 'No group pictures yet' }));
+    return;
+  }
+  ui.select.replaceChildren(...state.maps.map((m) =>
+    el('option', { value: m.folder, textContent: m.name || m.shortname || m.folder })));
+  ui.select.disabled = false;
+  await showMap(folderFromHash());
 }
 
-function make_map_info_html(map_metadata) {
-    var infos = [] ;
-
-    var info_name = ''
-    if (map_metadata['name']) {
-        info_name = map_metadata['name'];
-    } else if (map_metadata['short_name']) {
-        info_name = map_metadata['sort_name'];
-    }
-    if (info_name) {
-        if (map_metadata['url']) {
-            infos.push('<a href="'+map_metadata['url']+'" target="_blank">'+info_name+'</a>');
-        } else {
-            infos.push(info_name);
-        }
-    }
-
-    var p = map_metadata['source_photographer'];
-    if (p) {
-        if (p.startsWith('http')) {
-            infos.push('<a href="'+p+'" target="_blank">'+p+'</a>');
-        } else {
-            infos.push(p);
-        }
-    }
-
-    var pic = map_metadata['source_pic'];
-    if (pic) {
-        var url_pic;
-        if (pic.startsWith('http')) {
-            url_pic = '<a href="'+pic+'" target="_blank">Full image</a>'
-        } else {
-            url_pic = '<a href="/group_pics/'+groupmap.mapFolder+'/'+pic+'" target="_blank">Full image</a>'
-        }
-        infos.push(url_pic);
-    }
-    return infos.join(' - ');
-}
-
-function init_leafletmap(groupmap, max_zoom=7){
-    if (typeof groupmap.leafletMap === 'undefined') {
-        var map = L.map('map', {
-            minZoom: 2,
-            maxZoom: max_zoom,
-            crs: L.CRS.Simple
-        }).setView([-20, 100], 3);
-        groupmap.leafletMap = map;
-        groupmap.markersLayer = new L.LayerGroup();
-        groupmap.controlLayer = L.control.layers(null, {'Toggle markers' : groupmap.markersLayer}, {collapsed: false});
-        groupmap.controlLayer.addTo(groupmap.leafletMap);
-    }
-    groupmap.leafletMap.eachLayer(function (layer) {
-            groupmap.leafletMap.removeLayer(layer);
-    });
-    groupmap.leafletMap.options.maxZoom = max_zoom;
-}
-
-function show_map(mapFolder) {
-    groupmap.mapFolder = mapFolder;
-    var map_metadata = get_map_metadata_from_folder(mapFolder);
-    var max_zoom = 7;
-    if ('max_zoom' in map_metadata) {
-        max_zoom = map_metadata['max_zoom'];
-    }
-    init_leafletmap(groupmap, maxzoom=max_zoom);
-
-    // Adds the tiles/picture layer
-    L.tileLayer('/group_pics/'+mapFolder+'/{z}/{y}/{x}.jpg', {
-        noWrap: true,
-        attribution: make_map_info_html(map_metadata)
-    }).addTo(groupmap.leafletMap);
-
-    // Adds the markers layer
-    load_fluff_layer(mapFolder);
-
-    groupmap.leafletMap.on('click', show_new_fluff_marker);
-}
-
-function load_maps() {
-    load_fluffs();
-    if (typeof groupmap.mapsList === 'undefined'){
-        $.ajax({
-            url: "/list_maps",
-            dataType: "json",
-            success: function(data, textStatus) {
-                groupmap.mapsList = data['maps'];
-                if(window.location.hash) {
-                    show_map(window.location.hash.split('#')[1]);
-                } else {
-                    show_map(groupmap.mapsList[0]['folder']);
-                }
-            },
-            error: function(data) {
-                console.log(data.responseText);
-    //            toastr.options.timeOut = 1500;
-    //            toastr.options.positionClass= "toast-top-center";
-    //            toastr.error(data.responseText);
-            }
-        });
-    }
-}
-
-function load_fluffs() {
-   $.ajax({
-       url: "/all_fluffs",
-       dataType: "json",
-       success: function(data, textStatus) {
-           groupmap.fluffList = data['fluffs'];
-       },
-       error: function(data) {
-           console.log(data.responseText);
-       }
-   });
-}
+boot();

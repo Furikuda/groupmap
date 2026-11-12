@@ -1,0 +1,15 @@
+AllCops:
+  TargetRubyVersion: 3.3
+  NewCops: enable
+  SuggestExtensions: false
+  Exclude:
+    - 'vendor/**/*'
+
+Metrics/MethodLength:
+  Max: 20
+Metrics/AbcSize:
+  Max: 25
+Metrics/BlockLength:
+  AllowedMethods: ['helpers']
+  Exclude:
+    - 'tools/**/*'

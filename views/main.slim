@@ -1,60 +1,39 @@
 doctype html
-html
+html lang="en"
   head
-    meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
-    link rel="stylesheet" href="/leaflet/leaflet.css"
-    link type="text/css" rel="stylesheet" href="/materialize/css/materialize.min.css"  media="screen,projection"
+    meta charset="utf-8"
+    meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"
+    meta name="color-scheme" content="light dark"
+    title Fluffy maps
+    link rel="stylesheet" href="/vendor/leaflet-1.9.4/leaflet.css"
     link rel="stylesheet" href="/groupmap.css"
-    script src="/jquery-3.2.1.min.js"
-    script src="/leaflet/leaflet.js"
-    script src="/materialize/js/materialize.min.js"
+    script src="/vendor/leaflet-1.9.4/leaflet.js" defer=true
+    script src="/groupmap.js" type="module"
 
   body
-    div class="container"
-      h1
-        |Fluffy maps
+    header.bar
+      h1.title Fluffy maps
+      label.map-picker
+        span.visually-hidden Group picture
+        select#map-select disabled=true
+          option Loading…
+      button#toggle-markers.btn type="button" aria-pressed="true" title="Show or hide markers"
+        | Markers
+      button#about-open.btn type="button" aria-haspopup="dialog" About
 
-      div id="menu" class="row"
-        div class="col"
-          a class="dropdown-button btn" href="#" data-activates="dropdownmaps"
-            |Select a Fluffy group picture
-            i class="material-icons right"
-              |arrow_drop_down_circle
-        div class="col"
-          a class="waves-effect waves-light btn modal-trigger" href="#aboutmodal"
-            |About
+    main#map aria-label="Group picture map"
 
-      div id="map" class="row s12" style="z-index:10;height:80vh"
+    div#toast role="status" aria-live="polite" hidden=true
 
-      ul id="dropdownmaps" class="dropdown-content"
-        -@maplist.each do |f|
-          li
-            a href="##{f['folder']}" onclick="show_map('#{f['folder']}')"
-              |#{f['name']}
-      div id="aboutmodal" class="modal"
-        div class="modal-content"
-          h4
-            |About
-          p
-            i
-              b
-                |Click on an empty spot on the map to add info about a Fluff
-          p
-            |I made this little toy project to keep track of fluffy faces.
-          p
-            |I'm no web developer, I'm no developer.
-          p
-            |Please reach out to me (button bellow) for errors and complaints.
-          p
-            span
-              a href='https://twitter.com/JokullBarkson' target='_blank'
-                |Author &nbsp;&nbsp;
-            span
-              a href='https://github.com/Furikuda/groupmap' target='_blank'
-                |Code
-        div class="modal-footer"
-          a href="#!" class="modal-action modal-close  waves-effect waves-green btn-flat "
-            |OK!
-      script src="/groupmap.js"
-      javascript:
-        $(document).ready(function() { $('.modal').modal(); load_maps();});
+    dialog#about
+      form method="dialog"
+        h2 About
+        p
+          strong Tap or click an empty spot on the picture to tag a fluff.
+        p I made this little toy project to keep track of fluffy faces.
+        p I'm no web developer, I'm no developer.
+        p Please reach out to me (links below) for errors and complaints.
+        p.links
+          a href="https://twitter.com/JokullBarkson" target="_blank" rel="noopener" Author
+          a href="https://github.com/Furikuda/groupmap" target="_blank" rel="noopener" Code
+        button.btn.btn-primary value="ok" OK!

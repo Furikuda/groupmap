@@ -1,3 +1,5 @@
 db/*.sqlite
 *.swp
 public/group_pics
+/.bundle/
+/vendor/bundle/
