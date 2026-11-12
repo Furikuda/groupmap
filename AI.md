@@ -16,7 +16,7 @@ No build step, no framework. Files:
 - Manifest fields used: `name`, `shortname`, `url`, `source_pic`, `source_photographer`, `max_zoom` (default 7, the deepest tile level), and optionally `width`/`height` (pixel size of the tiled image). With width/height the view fits the picture exactly; otherwise the legacy view `[-20, 100]` @ zoom 3 is used and bounds fall back to the 256×256 zoom-0 square.
 - One extra zoom level beyond `max_zoom` is allowed (`maxNativeZoom`) for precise tapping on phones.
 - Click/tap an empty spot to open the add form; a tap that only dismisses an open popup does not start a new tag. The draft marker is removed when its popup closes.
-- Autocomplete is a native `<datalist>` built from `GET /all_fluffs`; choosing a known name pre-fills its info.
+- Autocomplete is a native `<datalist>` built from `GET /all_fluffs`. Info is pre-filled only when a name is *picked* from the list (non-`InputEvent` in Chrome, `inputType: insertReplacementText` in Firefox/Safari), never while typing. Picking another name replaces auto-filled info; editing the name afterwards clears it; info typed by hand is never overwritten.
 - All user content is rendered with `textContent`/DOM nodes; URLs in `info` are linkified only if they start with `http(s)://`. Manifest values in the attribution are HTML-escaped.
 - Names are decoded with `decodeEntities()` because the backend stores them `CGI.escapeHTML`-ed. If the backend stops escaping, remove that call.
 - Responses that arrive out of order for markers are dropped (`markersToken`).

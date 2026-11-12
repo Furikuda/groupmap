@@ -230,10 +230,22 @@ function addFluffForm(latlng) {
     nameInput, infoInput,
     el('div', { className: 'actions' }, cancel, save));
 
-  // Picking a known fluff pre-fills their info.
-  nameInput.addEventListener('input', () => {
-    const known = state.fluffsByName.get(nameInput.value);
-    if (known && !infoInput.value) infoInput.value = known.info;
+  // Picking a known fluff from the suggestion list pre-fills their info.
+  // Typing a matching name does not: a list pick is not an InputEvent in
+  // Chrome and has inputType "insertReplacementText" in Firefox, while typing
+  // and pasting are "insertText"/"insertFromPaste".
+  let autoFilled = null; // info value we put there, so we may replace/clear it
+  const ownInfo = () => infoInput.value && infoInput.value !== autoFilled;
+  nameInput.addEventListener('input', (e) => {
+    const picked = !(e instanceof InputEvent) || e.inputType === 'insertReplacementText';
+    const known = picked ? state.fluffsByName.get(nameInput.value) : null;
+    if (known) {
+      if (!ownInfo()) infoInput.value = autoFilled = known.info;
+    } else if (autoFilled !== null && !ownInfo()) {
+      // Name changed after a pick: drop the info that belonged to that fluff.
+      infoInput.value = '';
+      autoFilled = null;
+    }
   });
   cancel.addEventListener('click', closeDraft);
   form.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDraft(); });
