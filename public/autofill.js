@@ -14,6 +14,18 @@
 const TYPED_WINDOW_MS = 150;
 const EDIT_KEYS = ['Backspace', 'Delete', 'Process', 'Unidentified', 'Dead'];
 
+// Several fluffs can share a name (same person, links added over time). For
+// each name keep the one worth pre-filling: with info first, then the newest.
+export function indexByName(fluffs) {
+  const better = (a, b) => (Boolean(a.info) !== Boolean(b.info) ? Boolean(a.info) : a.id > b.id);
+  const byName = new Map();
+  for (const fluff of fluffs) {
+    const current = byName.get(fluff.name);
+    if (!current || better(fluff, current)) byName.set(fluff.name, fluff);
+  }
+  return byName;
+}
+
 export function isTypingKey({ key, ctrlKey = false, metaKey = false, altKey = false }) {
   if (ctrlKey || metaKey || altKey || typeof key !== 'string') return false;
   return [...key].length === 1 || EDIT_KEYS.includes(key);

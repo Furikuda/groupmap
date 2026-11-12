@@ -1,7 +1,7 @@
 // GroupMap front-end. Plain ES module, only depends on Leaflet (global `L`).
 // See AI.md for an overview of how this talks to the Sinatra backend.
 
-import { createAutofill } from './autofill.js';
+import { createAutofill, indexByName } from './autofill.js';
 
 // Add ?debug to the page URL to log form/autocomplete events to the console.
 const DEBUG = new URLSearchParams(location.search).has('debug');
@@ -100,13 +100,9 @@ document.body.append(datalist);
 
 async function loadFluffs() {
   const rows = await api.fluffs();
-  state.fluffs = new Map();
-  state.fluffsByName = new Map();
-  for (const row of rows) {
-    const fluff = { ...row, info: row.info ?? '' };
-    state.fluffs.set(fluff.id, fluff);
-    if (!state.fluffsByName.has(fluff.name)) state.fluffsByName.set(fluff.name, fluff);
-  }
+  const fluffs = rows.map((row) => ({ ...row, info: row.info ?? '' }));
+  state.fluffs = new Map(fluffs.map((fluff) => [fluff.id, fluff]));
+  state.fluffsByName = indexByName(fluffs);
   datalist.replaceChildren(...[...state.fluffsByName.keys()].sort().map((name) => el('option', { value: name })));
 }
 

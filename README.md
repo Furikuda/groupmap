@@ -16,7 +16,7 @@ bundle exec rackup -p 4567        # or: bundle exec ruby index.rb
 ### Tests
 
 ```
-bundle exec rake        # Minitest suite in test/
+bundle exec rake        # Minitest suite + QuickJS front-end tests
 ```
 
 ### Upgrading from the old database (once)

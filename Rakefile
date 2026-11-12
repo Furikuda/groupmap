@@ -8,4 +8,12 @@ Rake::TestTask.new(:test) do |t|
   t.warning = false
 end
 
-task default: :test
+namespace :test do
+  desc 'Front-end logic tests (QuickJS)'
+  task :js do
+    qjs = ENV.fetch('QJS', 'qjs')
+    FileList['test/js/**/*_test.js'].each { |f| sh qjs, '-m', f }
+  end
+end
+
+task default: %i[test test:js]

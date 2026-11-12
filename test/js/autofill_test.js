@@ -1,5 +1,5 @@
 // Run with: qjs -m test/js/autofill_test.js   (or `bundle exec rake test:js`)
-import { createAutofill, isTypingKey } from '../../public/autofill.js';
+import { createAutofill, indexByName, isTypingKey } from '../../public/autofill.js';
 
 let failures = 0;
 let count = 0;
@@ -154,6 +154,29 @@ for (const flavour of ['firefox', 'chrome']) {
 check('letters are typing keys', ['a', 'Z', ' ', 'é', '😀'].every((key) => isTypingKey({ key })), true);
 check('navigation keys are not', ['Enter', 'ArrowDown', 'Tab', 'Shift', 'Escape'].some((key) => isTypingKey({ key })), false);
 check('shortcuts are not', [{ key: 'v', ctrlKey: true }, { key: 'a', metaKey: true }, { key: 'x', altKey: true }].some(isTypingKey), false);
+
+// indexByName: several fluffs with the same name (live data has 42 such names).
+{
+  const byName = indexByName([
+    { id: 292, name: "Birdy", info: "" }, { id: 322, name: "Birdy", info: "https://t.me/funkbird" },
+    { id: 389, name: "Aji", info: "https://twitter.com/AjiWoof" }, { id: 642, name: "Aji", info: "https://bsky.app/profile/spicywoof.pet" },
+    { id: 2, name: "Cabs", info: "https://twitter.com/Cabarun" }, { id: 387, name: "Cabs", info: "" },
+    { id: 5, name: "Solo", info: "" },
+  ]);
+  check("prefers the entry with info over an older empty one", byName.get("Birdy").id, 322);
+  check("keeps the entry with info over a newer empty one", byName.get("Cabs").id, 2);
+  check("among entries with info, the newest wins", byName.get("Aji").id, 642);
+  check("a single empty entry is still listed", byName.get("Solo").id, 5);
+  check("one entry per name", [...byName.keys()].sort(), ["Aji", "Birdy", "Cabs", "Solo"]);
+}
+{
+  const byName = indexByName([{ id: 292, name: "Birdy", info: "" }, { id: 322, name: "Birdy", info: "https://t.me/funkbird" }]);
+  let t = 0;
+  const af = createAutofill((n) => byName.get(n), () => t);
+  t = 1000;
+  const res = af.input({ name: "Birdy", info: "", isInputEvent: true, inputType: "insertReplacementText" });
+  check("picking a duplicated name fills the link", res.info, "https://t.me/funkbird");
+}
 
 print(`${count} checks, ${failures} failures`);
 if (failures) throw new Error(`${failures} autofill check(s) failed`);
