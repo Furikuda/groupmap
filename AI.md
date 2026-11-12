@@ -50,7 +50,9 @@ Schema (`db/fluff_v2.sqlite`): `fluff(id, name NOT NULL, info NOT NULL DEFAULT '
 `map(id, fluff_id NOT NULL → fluff ON DELETE CASCADE, map, lat, lng NOT NULL, UNIQUE(fluff_id, map, lat, lng), INDEX(map))`.
 Text is stored raw (no HTML escaping); XSS safety relies on the front-end rendering text only, plus CSP.
 
-Logging: puma/rack access log only. Validation errors are not logged; 500s are logged as one line
+Logging: access log (Sinatra CommonLogger) + `rack.logger` at INFO on stderr (`set :logging, Logger::INFO`). Without it Sinatra::Base
+installs a FATAL-level logger and Rack::Protection 403s (e.g. JsonCsrf when the proxy does not forward `Host`) are invisible.
+Validation errors are not logged; 500s are logged as one line
 (`dump_errors` off). `GROUPMAP_SQL_LOG=1` re-enables query logging.
 
 Tile fallback: existing tiles are served statically (`Cache-Control: public, max-age=3600`); missing tiles inside a
@@ -61,3 +63,31 @@ known map get `blank.png` via `send_file`, unknown maps 404.
 - `tools/convert_db_to_v2.rb` – one-off, discard after use. Reads either old layout read-only, unescapes names, merges duplicates, reports rows with HTML-looking text.
 - `tools/prepare_pic.rb` – vips only (graphicsmagick no longer needed); float upscale factor, temp upscaled copy in a tmpdir, writes manifest with `max_zoom`/`width`/`height` via `JSON.pretty_generate`, aborts on any command failure.
 - `tools/transform.rb` – affine least-squares fit (stdlib `matrix`) from ≥3 control points; dry run by default, `--apply` updates the map's markers in one transaction. Replaces `transform.py`, which generated SQL for the pre-2019 schema.
+
+## Tests
+
+`bundle exec rake` runs Minitest + rack-test (`test/`). The helper sets `GROUPMAP_DB` to a temp file before loading the
+app; each test swaps `store`, `catalog` and `add_throttle` settings on `GroupMap::App` with fresh fixtures.
+
+| File | Covers |
+| --- | --- |
+| `throttle_test.rb` | min interval, sliding hourly cap, rejected hits not counted, per-key isolation, pruning, thread safety |
+| `marker_input_test.rb` | required/length limits, raw HTML kept, NFC + control-char + invalid UTF-8 cleanup, coordinate parsing and bounds |
+| `map_catalog_test.rb` | year sorting, broken manifests skipped with warning, hot reload, blank tile lookup |
+| `store_test.rb` | idempotent add, fluff reuse, NOT NULL / FK / cascade / index in the schema |
+| `app_test.rb` | every route, JSON errors (400/404/429/500), headers, throttling per IP, tile fallback, quiet logs |
+| `tools_test.rb` | convert script (both old layouts, read-only source, refusals), transform (dry run, apply, bad points), prepare_pic argument checks |
+
+Not covered: the front-end JS (no JS test runner here; Node is not used) and `prepare_pic.rb` tiling itself (needs libvips).
+
+### Deployment behind nginx
+
+The app must see the real `Host` (else Rack::Protection::JsonCsrf 403s every JSON call made from the page, because
+the Referer host differs) and the client IP (else the throttle treats all users as 127.0.0.1). Run with
+`RACK_ENV=production`: in development Sinatra 4 only permits localhost/`.test` hosts.
+
+```nginx
+proxy_set_header Host              $host;
+proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto $scheme;
+```

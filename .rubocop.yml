@@ -13,3 +13,6 @@ Metrics/BlockLength:
   AllowedMethods: ['helpers']
   Exclude:
     - 'tools/**/*'
+Metrics/ClassLength:
+  Exclude:
+    - 'test/**/*'

@@ -13,6 +13,12 @@ bundle install
 bundle exec rackup -p 4567        # or: bundle exec ruby index.rb
 ```
 
+### Tests
+
+```
+bundle exec rake        # Minitest suite in test/
+```
+
 ### Upgrading from the old database (once)
 
 The database is now `db/fluff_v2.sqlite`. Convert the old one, check the output, then delete the script:

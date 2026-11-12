@@ -31,6 +31,9 @@ module GroupMap
     set :show_exceptions, false
     set :raise_errors, false
     set :dump_errors, false # 500s are logged in one line by the error handler
+    # Access log + rack.logger at INFO on stderr. Without this Sinatra::Base installs
+    # a FATAL-level logger and Rack::Protection denials (403) are silently dropped.
+    set :logging, Logger::INFO
 
     set :store, Store.new(DB.connect)
     set :catalog, MapCatalog.new(File.join(ROOT, 'public', 'group_pics'))
