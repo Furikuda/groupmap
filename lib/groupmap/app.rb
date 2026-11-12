@@ -4,6 +4,7 @@ require 'json'
 require 'sinatra/base'
 require 'slim'
 
+require_relative 'cache_headers'
 require_relative 'db'
 require_relative 'map_catalog'
 require_relative 'marker_input'
@@ -27,13 +28,14 @@ module GroupMap
     set :root, ROOT
     set :public_folder, File.join(ROOT, 'public')
     set :views, File.join(ROOT, 'views')
-    set :static_cache_control, [:public, { max_age: 3600 }]
     set :show_exceptions, false
     set :raise_errors, false
     set :dump_errors, false # 500s are logged in one line by the error handler
     # Access log + rack.logger at INFO on stderr. Without this Sinatra::Base installs
     # a FATAL-level logger and Rack::Protection denials (403) are silently dropped.
     set :logging, Logger::INFO
+
+    use CacheHeaders
 
     set :store, Store.new(DB.connect)
     set :catalog, MapCatalog.new(File.join(ROOT, 'public', 'group_pics'))

@@ -1,6 +1,10 @@
 // GroupMap front-end. Plain ES module, only depends on Leaflet (global `L`).
 // See AI.md for an overview of how this talks to the Sinatra backend.
 
+import { createAutofill } from './autofill.js';
+
+// Add ?debug to the page URL to log form/autocomplete events to the console.
+const DEBUG = new URLSearchParams(location.search).has('debug');
 const DEFAULT_MAX_ZOOM = 7;
 const TILE_SIZE = 256;
 // Legacy initial view, used when a manifest has no width/height.
@@ -230,22 +234,19 @@ function addFluffForm(latlng) {
     nameInput, infoInput,
     el('div', { className: 'actions' }, cancel, save));
 
-  // Picking a known fluff from the suggestion list pre-fills their info.
-  // Typing a matching name does not: a list pick is not an InputEvent in
-  // Chrome and has inputType "insertReplacementText" in Firefox, while typing
-  // and pasting are "insertText"/"insertFromPaste".
-  let autoFilled = null; // info value we put there, so we may replace/clear it
-  const ownInfo = () => infoInput.value && infoInput.value !== autoFilled;
+  // Only a pick from the suggestion list fills the info (see autofill.js).
+  const autofill = createAutofill((name) => state.fluffsByName.get(name));
+  nameInput.addEventListener('keydown', (e) => autofill.keydown(e));
+  for (const type of ['paste', 'cut', 'drop', 'compositionstart', 'compositionupdate']) {
+    nameInput.addEventListener(type, () => autofill.typed());
+  }
   nameInput.addEventListener('input', (e) => {
-    const picked = !(e instanceof InputEvent) || e.inputType === 'insertReplacementText';
-    const known = picked ? state.fluffsByName.get(nameInput.value) : null;
-    if (known) {
-      if (!ownInfo()) infoInput.value = autoFilled = known.info;
-    } else if (autoFilled !== null && !ownInfo()) {
-      // Name changed after a pick: drop the info that belonged to that fluff.
-      infoInput.value = '';
-      autoFilled = null;
-    }
+    const { picked, info } = autofill.input({
+      name: nameInput.value, info: infoInput.value,
+      isInputEvent: e instanceof InputEvent, inputType: e.inputType,
+    });
+    if (DEBUG) console.debug('name input', { value: nameInput.value, event: e.constructor.name, inputType: e.inputType, picked });
+    if (info !== undefined) infoInput.value = info;
   });
   cancel.addEventListener('click', closeDraft);
   form.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDraft(); });
